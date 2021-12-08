@@ -1,9 +1,15 @@
-from server.main import Main
+from server.server import Server
 
 
 def app():
-    server = Main()
-    server.on()
+    server = Server()
+
+    try:
+        server.open()
+        server.run()
+
+    except KeyboardInterrupt:
+        server.close()
 
 
 if __name__ == '__main__':
