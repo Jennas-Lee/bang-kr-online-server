@@ -1,12 +1,13 @@
 import json
-import sqlite3
-import re
+import traceback
 
 from socket import *
 from queue import Queue
 from threading import Thread
 
-from server.db import Db
+from game.db import Db
+from game.nickname import set_nickname
+from game.start import start_game
 
 HOST = ''
 PORT = 5555
@@ -40,49 +41,33 @@ class Server:
         print('Thread send start')
 
         while True:
+            msg = {'code': 0}
+
             try:
                 recv = self.queue.get()
                 recv_json = json.loads(recv[0])
 
-                if recv_json['code'] == 11:
-                    nickname = recv_json.get('nickname')
-                    msg = {
-                        'code': 0
-                    }
+                if recv_json.get('code') == 111:  # set nickname
+                    msg = set_nickname(recv_json.get('nickname'), recv[2], self.db)
 
-                    if re.match('^[ㄱ-힣a-zA-Z0-9]{1,10}$', nickname) is None:
-                        msg['code'] = 92
-
-                    elif self.db.check_duplicated_nickname(nickname):
-                        msg['code'] = 93
-
-                    else:
-                        try:
-                            msg['code'] = 11
-                            msg['players'] = self.db.set_nickname(nickname)
-
-                        except sqlite3.Error as e:
-                            print(e.args[0])
-
-                    if msg['code']:  # set nickname failed
-                        msg = json.dumps(msg)
-
-                        recv[1].send(msg)
-                    else:  # set nickname successful
-                        pass
+                elif recv_json.get('code') == 121:  # start game
+                    msg = start_game(self.db)
 
                 else:
-                    recv[1].send('unknown error ! - ' + recv)
-
-                # for conn in self.conn_group:
-                #     msg = 'Client' + str(recv[2]) + ' >> ' + str(recv[0])
-                #     if recv[1] != conn:
-                #         conn.send(bytes(msg.encode()))
-                #     else:
-                #         pass
+                    msg['code'] = 298
+                    print('unknown error ! - ' + recv[0])
 
             except json.decoder.JSONDecodeError:
-                recv[1].send('unknown error ! - ' + recv)
+                msg['code'] = 298
+                print('unknown error ! - ' + recv[0])
+
+            except Exception as e:
+                msg['code'] = 299
+                print(e.args[0])
+                traceback.print_exc()
+
+            msg = json.dumps(msg)
+            recv[1].send(bytes(msg.encode()))
 
     def recv(self, conn, count):
         print('Thread recv ' + str(count) + ' start')
@@ -103,7 +88,7 @@ class Server:
     def connect(self, conn):
         if self.conn_count > 8:  # too many players
             msg = {
-                'code': 91
+                'code': 291
             }
             msg = json.dumps(msg)
 

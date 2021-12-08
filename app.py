@@ -1,4 +1,4 @@
-from server.server import Server
+from game.server import Server
 
 
 def app():
